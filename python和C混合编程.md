@@ -11,7 +11,7 @@
 import numpy as np
 import ctypes as ct
 
-clib = ct.DLL('./test.so')
+clib = ct.CDLL('./test.so')
 clib.test_python()
 ```
 
@@ -35,3 +35,67 @@ test.so: main.c
 动态链接库，然后我们就可以调用动态链接库里面暴漏出来的接口了。
 需要注意各个平台下的写法是不一样的，在windows平台下，需要使用__dllexport宏
 来告诉编译器，将这个函数暴露出来。
+
+我们再来看一个例子，主要是使用带有参数的函数，
+```c
+
+#include <stdio.h>
+
+extern void test_python(float \*array, int len) {
+  for (int i = 0; i < len; i++) {
+    printf("%f\n", array[i]);
+  }
+}
+```
+
+```python
+import numpy as np
+import ctypes as ct
+
+clib = ct.CDLL('./test.so')
+a = [1.0, 2.0, 3.0]
+clib.test_python((ct.c_float*len(a))(*a), ct.c_int(len(a)))
+
+```
+这样我们就把一个Python的传递进了一个C语言的函数中去。
+需要注意的是当我们使用g++或者clang++作为来编译C代码的时候，需要在外围加上对应的extern "C"声明。
+
+上面的那种写法是非常丑陋的，还有另外一种更方便的方式把数据传入进模块中。
+
+```python
+
+import numpy as np
+import numpy as np
+import ctypes as ct
+
+clib = ct.CDLL('./test.so')
+a = np.array([1,2,3], dtype=np.float32, copy=True)
+clib.test_python(a.ctypes.data_as(ct.POINTER(ct.c_float)), a.shape[0])
+```
+
+在考虑另外一种情况，我们会返回最终的结果码来说明程序运行是否成功。
+这个时候需要我们使用指定返回的数据类型。
+
+```c
+#include <stdio.h>
+
+extern int test_python(float \*array, int len) {
+  for (int i = 0; i < len; i++) {
+    printf("%f\n", array[i]);
+  }
+  return 0;
+}
+```
+
+```python
+
+import numpy as np
+import numpy as np
+import ctypes as ct
+
+clib = ct.CDLL('./test.so')
+a = np.array([1,2,3], dtype=np.float32, copy=True)
+clib.test_python.restype = ct.c_int
+clib_result = clib.test_python(a.ctypes.data_as(ct.POINTER(ct.c_float)), a.shape[0])
+print clib_result
+```
